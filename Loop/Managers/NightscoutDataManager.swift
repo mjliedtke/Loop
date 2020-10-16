@@ -178,7 +178,7 @@ final class NightscoutDataManager {
             recommendedBolus = state.recommendedBolus?.recommendation.amount
 
             let carbsOnBoard = state.carbsOnBoard
-            let predictedGlucose = state.predictedGlucose
+            let predictedGlucose = state.predictedGlucoseIncludingPendingInsulin
             let recommendedTempBasal = state.recommendedAutomaticDose
 
             manager.doseStore.insulinOnBoard(at: Date()) { (result) in
@@ -406,21 +406,31 @@ final class NightscoutDataManager {
         uploader.uploadDeviceStatus(deviceStatus)
     }
 
-    func uploadGlucose(_ values: [GlucoseValue], sensorState: SensorDisplayable?) {
+    func uploadGlucose(_ values: [GlucoseValue], sensorState: SensorDisplayable?, fromDevice device: HKDevice?) {
         guard let uploader = deviceManager.remoteDataManager.nightscoutService.uploader else {
             return
         }
+        
+        var deviceStr: String
+        if let device = device {
+            deviceStr = [device.name, device.manufacturer, device.model, device.firmwareVersion, device.softwareVersion].compactMap { $0 }.joined(separator: " ")
+        } else {
+            deviceStr = "loop://unknowndevice"
+        }
 
-        let device = "loop://\(UIDevice.current.name)"
         let direction: String? = {
             switch sensorState?.trendType {
             case .up?:
+                return "FortyFiveUp"
+            case .upUp?:
                 return "SingleUp"
-            case .upUp?, .upUpUp?:
+            case .upUpUp?:
                 return "DoubleUp"
             case .down?:
+                return "FortyFiveDown"
+            case .downDown?:
                 return "SingleDown"
-            case .downDown?, .downDownDown?:
+            case .downDownDown?:
                 return "DoubleDown"
             case .flat?:
                 return "Flat"
@@ -434,9 +444,10 @@ final class NightscoutDataManager {
                 glucoseMGDL: Int(value.quantity.doubleValue(for: .milligramsPerDeciliter)),
                 at: value.startDate,
                 direction: direction,
-                device: device
+                device: deviceStr
             )
         }
+        uploader.flushAll();
     }
 }
 
